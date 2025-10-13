@@ -1,0 +1,17 @@
+{
+  "name": "ai-travel-planner",
+  "version": "1.0.0",
+  "description": "AI Travel Planner using Groq API",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "axios": "^1.12.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^4.21.2",
+    "jspdf": "^3.0.3"
+  }
+}

@@ -1,0 +1,134 @@
+document.addEventListener("DOMContentLoaded", () => {
+  const form = document.getElementById("trip-form");
+  const outputDiv = document.getElementById("output");
+  const itineraryText = document.getElementById("itinerary-text");
+  const downloadBtn = document.getElementById("download-pdf");
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    const destination = document.getElementById("destination").value.trim();
+    const budget = document.getElementById("budget").value.trim();
+    const days = document.getElementById("days").value.trim();
+    const preferences = document.getElementById("preferences").value.trim();
+
+    // Show loading
+    outputDiv.classList.remove("hidden");
+    itineraryText.innerHTML = `<p>⏳ Generating your itinerary...</p>`;
+    downloadBtn.classList.add("hidden");
+
+    if (!destination || !budget || !days) {
+      itineraryText.innerHTML = `<p style="color:red;">Please fill in all required fields.</p>`;
+      return;
+    }
+
+    try {
+      const response = await fetch("/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ destination, budget, days, preferences }),
+      });
+
+      if (!response.ok) throw new Error(`Server returned ${response.status}`);
+      const data = await response.json();
+
+      let text = data.itinerary || "No itinerary generated.";
+
+      // 🧹 Clean and format for browser display
+      text = text
+        .replace(/\*\*/g, "")
+        .replace(/#+/g, "<br><br><strong>")
+        .replace(/\n{2,}/g, "<br><br>")
+        .replace(/\n/g, "<br>")
+        .replace(/- /g, "• ")
+        .replace(/\|/g, " | ")
+        .replace(/---/g, "<hr>")
+        .replace(/> /g, "")
+        .replace(/\*/g, "")
+        .trim();
+
+      itineraryText.innerHTML = `<div class="itinerary-box">${text}</div>`;
+      downloadBtn.classList.remove("hidden");
+
+      //PDF Generator
+      downloadBtn.onclick = () => {
+        const jsPDF = window.jspdf.jsPDF;
+        const doc = new jsPDF({
+          orientation: "portrait",
+          unit: "pt",
+          format: "a4",
+        });
+
+        // --- HEADER SECTION ---
+        doc.setFillColor(34, 150, 243);
+        doc.rect(0, 0, 595, 60, "F"); // blue banner
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(20);
+        doc.text("AI Travel Planner", 40, 40);
+
+        doc.setTextColor(0, 0, 0);
+        doc.setFont("times", "bold");
+        doc.setFontSize(16);
+        doc.text(`Destination: ${destination}`, 40, 90);
+        doc.setFont("times", "normal");
+        doc.setFontSize(12);
+        doc.text(`Budget: $${budget}  |  Duration: ${days} days`, 40, 110);
+        doc.text(`Preferences: ${preferences || "N/A"}`, 40, 130);
+
+        // --- CONTENT BODY ---
+        let y = 160;
+        const pageHeight = 842;
+        const margin = 40;
+
+        const plainText = itineraryText.innerText || itineraryText.textContent;
+        const lines = plainText.split(/\n+/);
+
+        lines.forEach((line) => {
+          if (/day\s*\d+/i.test(line)) {
+            // Highlight "Day" headers
+            doc.setFont("times", "bold");
+            doc.setFontSize(14);
+            doc.setTextColor(34, 150, 243);
+            doc.text(line.trim(), margin, y);
+            y += 20;
+            doc.setDrawColor(200, 200, 200);
+            doc.line(margin, y, 550, y);
+            y += 10;
+          } else {
+            // Regular text
+            doc.setFont("times", "normal");
+            doc.setFontSize(12);
+            doc.setTextColor(0, 0, 0);
+
+            const wrapped = doc.splitTextToSize(line.trim(), 500);
+            wrapped.forEach((subLine) => {
+              if (y > pageHeight - 60) {
+                doc.addPage();
+                y = margin;
+              }
+              doc.text(subLine, margin, y);
+              y += 16;
+            });
+          }
+        });
+
+        // --- FOOTER ---
+        doc.setFontSize(10);
+        doc.setTextColor(120);
+        doc.text(
+          "Generated using AI Travel Planner",
+          margin,
+          pageHeight - 20
+        );
+
+        // Save file
+        doc.save(`Travel_Itinerary_${destination}.pdf`);
+      };
+    } catch (err) {
+      console.error("Error:", err);
+      itineraryText.innerHTML = `<p style="color:red;">⚠️ ${err.message}</p>`;
+      downloadBtn.classList.add("hidden");
+    }
+  });
+});
