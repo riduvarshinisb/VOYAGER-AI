@@ -14,7 +14,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Show loading
     outputDiv.classList.remove("hidden");
-    itineraryText.innerHTML = `<p>⏳ Generating your itinerary...</p>`;
+    itineraryText.innerHTML = `<p>Generating your itinerary…</p>`;
     downloadBtn.classList.add("hidden");
 
     if (!destination || !budget || !days) {

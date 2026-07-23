@@ -1,51 +1,65 @@
-/* Modern Glass UI */
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
-/* Title */
-.title {
-  font-family: 'Bungee Shade', cursive;
-  font-size: 3.5em;
-  color: #fff;
-  letter-spacing: 2px;
-  margin-bottom: 25px;
-  text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+:root {
+  --bg: #F6F5F1;
+  --surface: #FFFFFF;
+  --ink: #1B1F23;
+  --ink-soft: #5B6169;
+  --border: #E3E1DA;
+  --accent: #1E4D5B;
+  --accent-dark: #163944;
+  --accent-tint: #E7EEEE;
 }
 
-/* Body */
 body {
   min-height: 100vh;
-  background: linear-gradient(135deg, #d0aeed, #c27ee2, #3e0850);
+  background: var(--bg);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  color: #fff;
-  padding: 40px 15px;
-  font-family: 'Tinos', serif;
-  overflow-y: auto;
+  color: var(--ink);
+  padding: 64px 20px;
+  font-family: 'Inter', sans-serif;
 }
 
-/* Container */
 .container {
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: 20px;
-  backdrop-filter: blur(14px);
-  box-shadow: 0 8px 32px rgba(87, 14, 121, 0.37);
-  padding: 30px 40px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-shadow: 0 1px 2px rgba(20, 20, 20, 0.04);
+  padding: 48px 44px;
   width: 100%;
-  max-width: 700px;
-  text-align: center;
-  animation: fadeIn 1s ease-in-out;
+  max-width: 640px;
 }
 
-/* Form */
+.app-header {
+  margin-bottom: 40px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.title {
+  font-family: 'Fraunces', serif;
+  font-size: 2.1em;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+
+.subtitle {
+  margin-top: 6px;
+  font-size: 0.95em;
+  color: var(--ink-soft);
+}
+
 .form {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 22px;
 }
 
 .form-group {
@@ -54,122 +68,105 @@ body {
 
 label {
   font-weight: 600;
-  font-family: 'Tinos', serif;
+  font-family: 'Inter', sans-serif;
   margin-bottom: 8px;
   display: block;
-  font-size: 1.2em;
+  font-size: 0.78em;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
 }
 
 input, textarea {
   width: 100%;
-  padding: 12px 15px;
-  border: none;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.15);
-  color: #fff;
-  font-size: 1em;
-  font-family: 'Tinos', serif;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.98em;
+  font-family: 'Inter', sans-serif;
   resize: none;
-  transition: all 0.3s ease;
+  transition: border-color 0.15s ease;
 }
 
 input:focus, textarea:focus {
   outline: none;
-  background: rgba(255, 255, 255, 0.25);
+  border-color: var(--accent);
 }
 
-/* Buttons */
 .btn {
-  background: linear-gradient(135deg, #d9ca20, #eada7c);
+  background: var(--accent);
   color: #fff;
-  padding: 12px 22px;
+  padding: 13px 22px;
   border: none;
-  border-radius: 12px;
+  border-radius: 3px;
   cursor: pointer;
-  font-size: 1.2em;
+  font-size: 0.95em;
   font-weight: 600;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.25);
+  font-family: 'Inter', sans-serif;
+  letter-spacing: 0.02em;
+  transition: background 0.15s ease;
 }
 
 .btn:hover {
-  background: linear-gradient(135deg, #eada7c, #d9ca20);
-  transform: translateY(-2px);
+  background: var(--accent-dark);
 }
 
-/* Output */
 .output {
-  margin-top: 35px;
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 15px;
-  padding: 25px;
+  margin-top: 36px;
+  padding-top: 32px;
+  border-top: 1px solid var(--border);
   text-align: left;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.25);
-  max-height: 400px;
-  overflow-y: auto;
-  animation: fadeInUp 0.8s ease;
 }
 
 .output h2 {
-  margin-bottom: 15px;
-  font-size: 1.6em;
-  color: #F7EFFF;
-  text-align: center;
+  margin-bottom: 18px;
+  font-size: 1.2em;
+  font-family: 'Fraunces', serif;
+  font-weight: 600;
+  color: var(--ink);
 }
 
-/* Itinerary box */
 .itinerary-box {
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 15px;
-  padding: 20px;
-  margin-top: 15px;
+  background: var(--accent-tint);
+  border-radius: 4px;
+  padding: 22px 24px;
   line-height: 1.7;
-  color: #f1f1f1;
-  font-size: 1em;
+  color: var(--ink);
+  font-size: 0.96em;
   white-space: pre-wrap;
+  max-height: 420px;
+  overflow-y: auto;
 }
 
-/* Download button */
 #download-pdf {
   margin-top: 20px;
-  background: linear-gradient(135deg, #079f39, #43e96f);
-  color: #fff;
-  border: none;
-  padding: 12px 20px;
-  border-radius: 10px;
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  padding: 11px 20px;
+  border-radius: 3px;
   cursor: pointer;
-  font-size: 1em;
+  font-size: 0.9em;
   font-weight: 600;
-  transition: 0.3s ease;
+  font-family: 'Inter', sans-serif;
+  transition: all 0.15s ease;
 }
 
 #download-pdf:hover {
-  background: linear-gradient(135deg, #43e96f, #079f39);
+  background: var(--accent);
+  color: #fff;
 }
 
-/* Hidden */
 .hidden {
   display: none;
 }
 
-/* Animations */
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(-20px); }
-  to { opacity: 1; transform: translateY(0); }
+.itinerary-box::-webkit-scrollbar {
+  width: 6px;
 }
-
-@keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* Scrollbar */
-.output::-webkit-scrollbar {
-  width: 8px;
-}
-.output::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.3);
+.itinerary-box::-webkit-scrollbar-thumb {
+  background: var(--border);
   border-radius: 10px;
 }
-
-
