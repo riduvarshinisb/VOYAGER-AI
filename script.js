@@ -3,6 +3,32 @@ document.addEventListener("DOMContentLoaded", () => {
   const outputDiv = document.getElementById("output");
   const itineraryText = document.getElementById("itinerary-text");
   const downloadBtn = document.getElementById("download-pdf");
+  const budgetBreakdownDiv = document.getElementById("budget-breakdown");
+
+  function getBudgetBreakdown(totalBudget) {
+    const categories = [
+      { label: "Accommodation", percent: 0.35 },
+      { label: "Food & Dining", percent: 0.25 },
+      { label: "Local Transport", percent: 0.15 },
+      { label: "Activities & Sightseeing", percent: 0.15 },
+      { label: "Shopping & Misc.", percent: 0.10 },
+    ];
+    return categories.map((c) => ({
+      label: c.label,
+      amount: totalBudget * c.percent,
+    }));
+  }
+
+  function renderBudgetBreakdown(totalBudget) {
+    const breakdown = getBudgetBreakdown(totalBudget);
+    const rows = breakdown
+      .map(
+        (item) =>
+          `<div class="budget-row"><span>${item.label}</span><span>₹${Math.round(item.amount).toLocaleString("en-IN")}</span></div>`
+      )
+      .join("");
+    return `<div class="budget-row budget-total"><span>Total Budget</span><span>₹${Math.round(totalBudget).toLocaleString("en-IN")}</span></div>${rows}`;
+  }
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -31,6 +57,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (!response.ok) throw new Error(`Server returned ${response.status}`);
       const data = await response.json();
+
+      budgetBreakdownDiv.innerHTML = renderBudgetBreakdown(Number(budget));
 
       let text = data.itinerary || "No itinerary generated.";
 
@@ -76,10 +104,32 @@ document.addEventListener("DOMContentLoaded", () => {
         doc.text(`Budget: Rs. ${budget}  |  Duration: ${days} days`, 40, 110);
         doc.text(`Preferences: ${preferences || "N/A"}`, 40, 130);
 
-        // --- CONTENT BODY ---
-        let y = 160;
         const pageHeight = 842;
         const margin = 40;
+        let y = 160;
+
+        // --- BUDGET BREAKDOWN ---
+        doc.setFont("times", "bold");
+        doc.setFontSize(13);
+        doc.setTextColor(30, 77, 91);
+        doc.text("Budget Breakdown", margin, y);
+        y += 18;
+
+        const breakdown = getBudgetBreakdown(Number(budget));
+        doc.setFontSize(11);
+        breakdown.forEach((item) => {
+          doc.setFont("times", "normal");
+          doc.setTextColor(0, 0, 0);
+          doc.text(item.label, margin, y);
+          doc.text(`Rs. ${Math.round(item.amount).toLocaleString("en-IN")}`, 550, y, { align: "right" });
+          y += 16;
+        });
+        y += 14;
+        doc.setDrawColor(200, 200, 200);
+        doc.line(margin, y, 550, y);
+        y += 20;
+
+        // --- CONTENT BODY ---
 
         const plainText = (itineraryText.innerText || itineraryText.textContent).replace(/₹/g, "Rs. ");
         const lines = plainText.split(/\n+/);
