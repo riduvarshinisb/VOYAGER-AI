@@ -65,7 +65,7 @@ document.addEventListener("DOMContentLoaded", () => {
         doc.setFont("helvetica", "bold");
         doc.setTextColor(255, 255, 255);
         doc.setFontSize(20);
-        doc.text("AI Travel Planner", 40, 40);
+        doc.text("Voyager AI", 40, 40);
 
         doc.setTextColor(0, 0, 0);
         doc.setFont("times", "bold");
@@ -117,7 +117,7 @@ document.addEventListener("DOMContentLoaded", () => {
         doc.setFontSize(10);
         doc.setTextColor(120);
         doc.text(
-          "Generated using AI Travel Planner",
+          "Generated using Voyager AI",
           margin,
           pageHeight - 20
         );
