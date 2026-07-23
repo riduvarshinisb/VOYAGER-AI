@@ -5,6 +5,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const downloadBtn = document.getElementById("download-pdf");
   const budgetBreakdownDiv = document.getElementById("budget-breakdown");
   const weatherInfoDiv = document.getElementById("weather-info");
+  const mapContainerDiv = document.getElementById("map-container");
   let lastWeather = null;
 
   function getBudgetBreakdown(totalBudget) {
@@ -105,6 +106,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
       budgetBreakdownDiv.innerHTML = renderBudgetBreakdown(Number(budget));
 
+      const mapQuery = encodeURIComponent(destination);
+      mapContainerDiv.innerHTML = `<iframe src="https://maps.google.com/maps?q=${mapQuery}&output=embed" loading="lazy" allowfullscreen></iframe>`;
+
       let text = data.itinerary || "No itinerary generated.";
 
       // 🧹 Clean and format for browser display
@@ -148,10 +152,15 @@ document.addEventListener("DOMContentLoaded", () => {
         doc.setFontSize(12);
         doc.text(`Budget: Rs. ${budget}  |  Duration: ${days} days`, 40, 110);
         doc.text(`Preferences: ${preferences || "N/A"}`, 40, 130);
+        doc.setTextColor(30, 77, 91);
+        doc.textWithLink("View destination on Google Maps", 40, 148, {
+          url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(destination)}`,
+        });
+        doc.setTextColor(0, 0, 0);
 
         const pageHeight = 842;
         const margin = 40;
-        let y = 160;
+        let y = 172;
 
         // --- WEATHER ---
         if (lastWeather && lastWeather.outOfRange) {

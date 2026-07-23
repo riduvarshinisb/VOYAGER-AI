@@ -263,3 +263,17 @@ input:focus, textarea:focus {
   color: var(--ink-soft);
   margin-top: 8px;
 }
+
+.map-container {
+  margin-bottom: 20px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.map-container iframe {
+  width: 100%;
+  height: 240px;
+  border: 0;
+  display: block;
+}
