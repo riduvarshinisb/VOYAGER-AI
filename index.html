@@ -38,6 +38,11 @@
       </div>
 
       <div class="form-group">
+        <label for="start-date">START DATE</label>
+        <input type="date" id="start-date" required />
+      </div>
+
+      <div class="form-group">
         <label for="preferences">PREFERENCES</label>
         <textarea id="preferences" placeholder="e.g. beaches, local food, adventure"></textarea>
       </div>
@@ -47,6 +52,7 @@
 
     <div id="output" class="output hidden">
       <h2>Your Smart Itinerary</h2>
+      <div id="weather-info" class="weather-info"></div>
       <div id="budget-breakdown" class="budget-breakdown"></div>
       <div id="itinerary-text"></div>
       <button id="download-pdf" class="btn hidden">DOWNLOAD AS PDF</button>

@@ -4,6 +4,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const itineraryText = document.getElementById("itinerary-text");
   const downloadBtn = document.getElementById("download-pdf");
   const budgetBreakdownDiv = document.getElementById("budget-breakdown");
+  const weatherInfoDiv = document.getElementById("weather-info");
+  let lastWeather = null;
 
   function getBudgetBreakdown(totalBudget) {
     const categories = [
@@ -30,12 +32,39 @@ document.addEventListener("DOMContentLoaded", () => {
     return `<div class="budget-row budget-total"><span>Total Budget</span><span>₹${Math.round(totalBudget).toLocaleString("en-IN")}</span></div>${rows}`;
   }
 
+  function renderWeather(weather) {
+    if (!weather) return "";
+
+    if (weather.outOfRange) {
+      return `<p class="weather-note">Weather forecast isn't available yet for dates this far out — check back closer to your trip (within about 2 weeks) for a live forecast.</p>`;
+    }
+
+    if (!weather.forecast || weather.forecast.length === 0) return "";
+
+    const days = weather.forecast
+      .map((d) => {
+        const label = new Date(d.date).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
+        return `<div class="weather-day">
+          <div class="day-label">${label}</div>
+          <div class="day-temp">${Math.round(d.max)}° / ${Math.round(d.min)}°</div>
+        </div>`;
+      })
+      .join("");
+
+    const partialNote = weather.partial
+      ? `<p class="weather-note">Showing forecast for the first ${weather.forecast.length} day(s) of your trip — the rest are too far out to forecast yet.</p>`
+      : "";
+
+    return `<div class="weather-forecast">${days}</div>${partialNote}`;
+  }
+
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
 
     const destination = document.getElementById("destination").value.trim();
     const budget = document.getElementById("budget").value.trim();
     const days = document.getElementById("days").value.trim();
+    const startDate = document.getElementById("start-date").value;
     const preferences = document.getElementById("preferences").value.trim();
 
     // Show loading
@@ -49,14 +78,30 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     try {
-      const response = await fetch("/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ destination, budget, days, preferences }),
-      });
+      const [response, weatherResponse] = await Promise.all([
+        fetch("/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ destination, budget, days, preferences }),
+        }),
+        fetch("/weather", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ destination, startDate, days }),
+        }),
+      ]);
 
       if (!response.ok) throw new Error(`Server returned ${response.status}`);
       const data = await response.json();
+
+      if (weatherResponse.ok) {
+        const weatherData = await weatherResponse.json();
+        lastWeather = weatherData;
+        weatherInfoDiv.innerHTML = renderWeather(weatherData);
+      } else {
+        lastWeather = null;
+        weatherInfoDiv.innerHTML = "";
+      }
 
       budgetBreakdownDiv.innerHTML = renderBudgetBreakdown(Number(budget));
 
@@ -107,6 +152,36 @@ document.addEventListener("DOMContentLoaded", () => {
         const pageHeight = 842;
         const margin = 40;
         let y = 160;
+
+        // --- WEATHER ---
+        if (lastWeather && lastWeather.outOfRange) {
+          doc.setFont("times", "italic");
+          doc.setFontSize(10);
+          doc.setTextColor(100, 100, 100);
+          doc.text("Weather forecast not yet available this far in advance.", margin, y);
+          y += 22;
+        } else if (lastWeather && lastWeather.forecast && lastWeather.forecast.length) {
+          doc.setFont("times", "bold");
+          doc.setFontSize(13);
+          doc.setTextColor(30, 77, 91);
+          doc.text("Weather Forecast", margin, y);
+          y += 18;
+
+          doc.setFont("times", "normal");
+          doc.setFontSize(11);
+          doc.setTextColor(0, 0, 0);
+          const forecastLine = lastWeather.forecast
+            .map((d) => {
+              const label = new Date(d.date).toLocaleDateString("en-IN", { weekday: "short" });
+              return `${label}: ${Math.round(d.max)}/${Math.round(d.min)}°`;
+            })
+            .join("   ");
+          doc.text(forecastLine, margin, y);
+          y += 14;
+          doc.setDrawColor(200, 200, 200);
+          doc.line(margin, y, 550, y);
+          y += 20;
+        }
 
         // --- BUDGET BREAKDOWN ---
         doc.setFont("times", "bold");

@@ -206,3 +206,60 @@ input:focus, textarea:focus {
   color: var(--ink) !important;
   font-weight: 600;
 }
+
+.weather-info {
+  margin-bottom: 20px;
+}
+
+.weather-current {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.weather-temp {
+  font-family: 'Fraunces', serif;
+  font-size: 1.6em;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.weather-condition {
+  font-size: 0.9em;
+  color: var(--ink-soft);
+}
+
+.weather-forecast {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+}
+
+.weather-day {
+  flex: 1;
+  min-width: 78px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 10px 8px;
+  text-align: center;
+}
+
+.weather-day .day-label {
+  font-size: 0.72em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+  margin-bottom: 6px;
+}
+
+.weather-day .day-temp {
+  font-size: 0.85em;
+  font-weight: 600;
+}
+
+.weather-note {
+  font-size: 0.82em;
+  color: var(--ink-soft);
+  margin-top: 8px;
+}
