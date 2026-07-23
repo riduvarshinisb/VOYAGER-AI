@@ -73,7 +73,7 @@ document.addEventListener("DOMContentLoaded", () => {
         doc.text(`Destination: ${destination}`, 40, 90);
         doc.setFont("times", "normal");
         doc.setFontSize(12);
-        doc.text(`Budget: $${budget}  |  Duration: ${days} days`, 40, 110);
+        doc.text(`Budget: Rs. ${budget}  |  Duration: ${days} days`, 40, 110);
         doc.text(`Preferences: ${preferences || "N/A"}`, 40, 130);
 
         // --- CONTENT BODY ---
@@ -81,7 +81,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const pageHeight = 842;
         const margin = 40;
 
-        const plainText = itineraryText.innerText || itineraryText.textContent;
+        const plainText = (itineraryText.innerText || itineraryText.textContent).replace(/₹/g, "Rs. ");
         const lines = plainText.split(/\n+/);
 
         lines.forEach((line) => {

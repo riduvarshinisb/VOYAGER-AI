@@ -46,7 +46,7 @@ app.post("/generate", async (req, res) => {
           },
           {
             role: "user",
-            content: `Plan a ${days}-day trip to ${destination} with a budget of ${budget} USD. Include top attractions, meal options, accommodation, and travel tips. Preferences: ${preferences}.`,
+            content: `Plan a ${days}-day trip to ${destination} with a budget of ₹${budget} (Indian Rupees). Include top attractions, meal options, accommodation, and travel tips, with all costs quoted in Indian Rupees (₹). Preferences: ${preferences}.`,
           },
         ],
         temperature: 0.8,
