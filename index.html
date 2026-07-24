@@ -57,6 +57,19 @@
       <div id="budget-breakdown" class="budget-breakdown"></div>
       <div id="itinerary-text"></div>
       <button id="download-pdf" class="btn hidden">DOWNLOAD AS PDF</button>
+
+      <div id="feedback-panel" class="feedback-panel hidden">
+        <p class="feedback-label">Not quite right? Tell us what to change:</p>
+        <div class="feedback-chips">
+          <button type="button" class="chip" data-value="too-expensive">Too expensive</button>
+          <button type="button" class="chip" data-value="too-much-walking">Too much walking</button>
+          <button type="button" class="chip" data-value="more-food">Want more food options</button>
+          <button type="button" class="chip" data-value="more-culture">Want more culture/heritage</button>
+          <button type="button" class="chip" data-value="too-packed">Too packed, relax the pace</button>
+        </div>
+        <textarea id="feedback-text" placeholder="Anything else? (optional)" rows="2"></textarea>
+        <button id="regenerate-btn" class="btn secondary-btn">REGENERATE ITINERARY</button>
+      </div>
     </div>
   </div>
 

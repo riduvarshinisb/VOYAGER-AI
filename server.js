@@ -41,7 +41,7 @@ function describeWeather(code) {
 
 // API endpoint for itinerary generation
 app.post("/generate", async (req, res) => {
-  const { destination, budget, days, preferences } = req.body;
+  const { destination, budget, days, preferences, feedback } = req.body;
 
   if (!destination || !budget || !days) {
     return res.status(400).json({ error: "Please fill in all fields." });
@@ -60,7 +60,7 @@ app.post("/generate", async (req, res) => {
           },
           {
             role: "user",
-            content: `Plan a ${days}-day trip to ${destination} with a budget of ₹${budget} (Indian Rupees). Include top attractions, meal options, accommodation, and travel tips, with all costs quoted in Indian Rupees (₹). Preferences: ${preferences}.`,
+            content: `Plan a ${days}-day trip to ${destination} with a budget of ₹${budget} (Indian Rupees). Include top attractions, meal options, accommodation, and travel tips, with all costs quoted in Indian Rupees (₹). Preferences: ${preferences}.${feedback ? ` The user reviewed a previous version of this plan and gave this feedback — adjust accordingly: ${feedback}.` : ""}`,
           },
         ],
         temperature: 0.8,

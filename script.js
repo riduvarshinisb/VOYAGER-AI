@@ -3,6 +3,17 @@ document.addEventListener("DOMContentLoaded", () => {
   const outputDiv = document.getElementById("output");
   const itineraryText = document.getElementById("itinerary-text");
   const downloadBtn = document.getElementById("download-pdf");
+  const feedbackPanel = document.getElementById("feedback-panel");
+  const feedbackChips = document.querySelectorAll(".chip");
+  const feedbackText = document.getElementById("feedback-text");
+  const regenerateBtn = document.getElementById("regenerate-btn");
+  let lastFormData = null;
+
+  feedbackChips.forEach((chip) => {
+    chip.addEventListener("click", () => {
+      chip.classList.toggle("selected");
+    });
+  });
   const budgetBreakdownDiv = document.getElementById("budget-breakdown");
   const weatherInfoDiv = document.getElementById("weather-info");
   const mapContainerDiv = document.getElementById("map-container");
@@ -68,6 +79,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const startDate = document.getElementById("start-date").value;
     const preferences = document.getElementById("preferences").value.trim();
 
+    lastFormData = { destination, budget, days, startDate, preferences };
+
     // Show loading
     outputDiv.classList.remove("hidden");
     itineraryText.innerHTML = `<p>Generating your itinerary…</p>`;
@@ -126,6 +139,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       itineraryText.innerHTML = `<div class="itinerary-box">${text}</div>`;
       downloadBtn.classList.remove("hidden");
+      feedbackPanel.classList.remove("hidden");
 
       //PDF Generator
       downloadBtn.onclick = () => {
@@ -263,6 +277,53 @@ document.addEventListener("DOMContentLoaded", () => {
       console.error("Error:", err);
       itineraryText.innerHTML = `<p style="color:red;">⚠️ ${err.message}</p>`;
       downloadBtn.classList.add("hidden");
+    }
+  });
+
+  regenerateBtn.addEventListener("click", async () => {
+    if (!lastFormData) return;
+
+    const selectedChips = Array.from(feedbackChips)
+      .filter((c) => c.classList.contains("selected"))
+      .map((c) => c.textContent);
+    const freeText = feedbackText.value.trim();
+
+    const feedbackNote = [...selectedChips, freeText].filter(Boolean).join("; ");
+
+    itineraryText.innerHTML = `<p>Regenerating with your feedback…</p>`;
+    downloadBtn.classList.add("hidden");
+
+    try {
+      const response = await fetch("/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...lastFormData, feedback: feedbackNote }),
+      });
+
+      if (!response.ok) throw new Error(`Server returned ${response.status}`);
+      const data = await response.json();
+
+      let text = data.itinerary || "No itinerary generated.";
+      text = text
+        .replace(/\*\*/g, "")
+        .replace(/#+/g, "<br><br><strong>")
+        .replace(/\n{2,}/g, "<br><br>")
+        .replace(/\n/g, "<br>")
+        .replace(/- /g, "• ")
+        .replace(/\|/g, " | ")
+        .replace(/---/g, "<hr>")
+        .replace(/> /g, "")
+        .replace(/\*/g, "")
+        .trim();
+
+      itineraryText.innerHTML = `<div class="itinerary-box">${text}</div>`;
+      downloadBtn.classList.remove("hidden");
+
+      feedbackChips.forEach((c) => c.classList.remove("selected"));
+      feedbackText.value = "";
+    } catch (err) {
+      console.error("Error:", err);
+      itineraryText.innerHTML = `<p style="color:red;">⚠️ ${err.message}</p>`;
     }
   });
 });
