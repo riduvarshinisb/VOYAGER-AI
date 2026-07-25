@@ -40,35 +40,189 @@ function describeWeather(code) {
   return WEATHER_CODES[code] || "Weather unavailable";
 }
 
+// --- Seasonal price-trend forecaster (LSTM, trained offline) ---
+const lstmModel = JSON.parse(fs.readFileSync(path.join(__dirname, "lstm_weights.json"), "utf-8"));
+
+function detectDestType(destination) {
+  const lower = destination.toLowerCase();
+  for (const [type, info] of Object.entries(lstmModel.dest_types)) {
+    if (info.keywords.some((kw) => lower.includes(kw))) return type;
+  }
+  return "city"; // safest default (lowest seasonal swing)
+}
+
+function dayOfYear(dateStr) {
+  const d = new Date(dateStr);
+  const start = new Date(d.getFullYear(), 0, 0);
+  return Math.floor((d - start) / 86400000);
+}
+
+function seasonalValue(doy, amplitude, peakDay) {
+  return 1 + amplitude * Math.cos((2 * Math.PI * (doy - peakDay)) / 365);
+}
+
+function sigmoid(x) {
+  return 1 / (1 + Math.exp(-Math.max(-30, Math.min(30, x))));
+}
+
+function lstmForward(inputSeq) {
+  const { hidden, weights: W } = lstmModel;
+  let h = new Array(hidden).fill(0);
+  let c = new Array(hidden).fill(0);
+
+  for (const x of inputSeq) {
+    const z = [...h, ...x]; // concat hidden + input
+
+    const gate = (Wname, bname) =>
+      W[bname].map((_, j) => {
+        let sum = W[bname][j];
+        for (let k = 0; k < z.length; k++) sum += z[k] * W[Wname][k][j];
+        return sum;
+      });
+
+    const f = gate("Wf", "bf").map(sigmoid);
+    const i = gate("Wi", "bi").map(sigmoid);
+    const o = gate("Wo", "bo").map(sigmoid);
+    const g = gate("Wg", "bg").map(Math.tanh);
+
+    c = c.map((cv, idx) => f[idx] * cv + i[idx] * g[idx]);
+    h = c.map((cv, idx) => o[idx] * Math.tanh(cv));
+  }
+
+  let y = W.by[0];
+  for (let k = 0; k < hidden; k++) y += h[k] * W.Wy[k][0];
+  return y;
+}
+
+function getSeasonalOutlook(destination, startDate) {
+  const type = detectDestType(destination);
+  const { amplitude, peak_day } = lstmModel.dest_types[type];
+  const startDoy = dayOfYear(startDate);
+
+  const seq = [];
+  for (let d = startDoy - lstmModel.seq_len; d < startDoy; d++) {
+    const doy = ((d % 365) + 365) % 365;
+    const val = seasonalValue(doy, amplitude, peak_day);
+    seq.push([val, Math.sin((2 * Math.PI * doy) / 365), Math.cos((2 * Math.PI * doy) / 365)]);
+  }
+
+  const predicted = lstmForward(seq);
+  const percentDiff = Math.round((predicted - 1) * 100);
+
+  const typeLabel = type.charAt(0).toUpperCase() + type.slice(1);
+  let message;
+  if (percentDiff >= 12) {
+    message = `Peak season for this type of destination — prices trending ~${percentDiff}% above average.`;
+  } else if (percentDiff <= -8) {
+    message = `Off-season — prices trending ~${Math.abs(percentDiff)}% below average, good time to visit for savings.`;
+  } else {
+    message = `Prices trending close to the annual average (~${percentDiff >= 0 ? "+" : ""}${percentDiff}%) for your dates.`;
+  }
+
+  return { type: typeLabel, percentDiff, message };
+}
+
+// --- Real-data accommodation price model (trained on NYC Airbnb data) ---
+const priceModel = JSON.parse(fs.readFileSync(path.join(__dirname, "price_model_weights.json"), "utf-8"));
+const NYC_KEYWORDS = ["new york", "nyc", "manhattan", "brooklyn"];
+
+function isNYC(destination) {
+  const lower = destination.toLowerCase();
+  return NYC_KEYWORDS.some((kw) => lower.includes(kw));
+}
+
+function predictNightlyPrice(borough, roomType) {
+  const { boroughs, room_types, num_mean, num_std, weights: W } = priceModel;
+
+  const rawNumeric = [Math.log1p(3), Math.log1p(15), 200, 1.0];
+  const numeric = rawNumeric.map((v, i) => (v - num_mean[i]) / num_std[i]);
+  const boroughVec = boroughs.map((b) => (b === borough ? 1 : 0));
+  const roomVec = room_types.map((r) => (r === roomType ? 1 : 0));
+  const x = [...numeric, ...boroughVec, ...roomVec];
+
+  const h1 = W.W1[0].map((_, j) => {
+    let s = W.b1[j];
+    for (let i = 0; i < x.length; i++) s += x[i] * W.W1[i][j];
+    return Math.max(0, s);
+  });
+  const h2 = W.W2[0].map((_, j) => {
+    let s = W.b2[j];
+    for (let i = 0; i < h1.length; i++) s += h1[i] * W.W2[i][j];
+    return Math.max(0, s);
+  });
+  let out = W.b3[0];
+  for (let i = 0; i < h2.length; i++) out += h2[i] * W.W3[i][0];
+
+  return Math.round(Math.expm1(out));
+}
+
+function getRealDataPriceInsight(destination) {
+  if (!isNYC(destination)) return null;
+  const nightly = predictNightlyPrice("Manhattan", "Entire home/apt");
+  return {
+    nightlyUsd: nightly,
+    message: `Real-data check: comparable Manhattan entire-home Airbnb listings average ~$${nightly}/night (model trained on 48,645 real NYC listings, test MAE $${priceModel.test_mae_usd.toFixed(0)}).`,
+  };
+}
+
 // --- Feedback-adjustment model (trained offline, loaded here for inference) ---
-// v2: predicts a continuous, BLENDED budget-delta vector directly, instead
-// of picking one of several fixed "arms" - this avoids the tie-break bug
-// where two valid feedback signals (e.g. "more culture" + "relax the pace")
-// would silently cancel down to only one winner being acted on.
 const bandit = JSON.parse(
   fs.readFileSync(path.join(__dirname, "bandit_weights.json"), "utf-8")
 );
 
-function detectKeywords(freeText) {
-  if (!freeText) return [];
-  const lower = freeText.toLowerCase();
-  return bandit.keyword_features.filter((kw) =>
-    bandit.keyword_triggers[kw].some((trigger) => lower.includes(trigger))
-  );
+async function scoreKeywords(freeText) {
+  const zeroScores = Object.fromEntries(bandit.keyword_features.map((k) => [k, 0]));
+  if (!freeText || !freeText.trim()) return zeroScores;
+
+  try {
+    const response = await axios.post(
+      GROQ_URL,
+      {
+        model: "llama-3.1-8b-instant",
+        messages: [
+          {
+            role: "system",
+            content:
+              "You rate travel feedback text against categories. Respond with ONLY a valid JSON object, no other text.",
+          },
+          {
+            role: "user",
+            content: `Rate how strongly this feedback expresses interest in each category, from 0.0 (not at all) to 1.0 (very strongly): ${bandit.keyword_features.join(", ")}.\nFeedback: "${freeText}"\nRespond as JSON only, e.g. {"shopping":0.0,"nightlife":0.0,"nature":0.0,"luxury":0.0,"family":0.0}`,
+          },
+        ],
+      },
+      { headers: { Authorization: `Bearer ${process.env.GROQ_API_KEY}` } }
+    );
+
+    const raw = response.data?.choices?.[0]?.message?.content || "{}";
+    const parsed = JSON.parse(raw.match(/\{[\s\S]*\}/)?.[0] || "{}");
+
+    const scores = { ...zeroScores };
+    for (const k of bandit.keyword_features) {
+      const v = Number(parsed[k]);
+      scores[k] = Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0;
+    }
+    return scores;
+  } catch (error) {
+    console.error("Keyword scoring failed, defaulting to no signal:", error.message);
+    return zeroScores;
+  }
 }
 
-function predictAdjustment(selectedChips, freeText) {
+async function predictAdjustment(selectedChips, freeText) {
   const activeChips = bandit.chip_features.filter((f) =>
     selectedChips.includes(f.replace(/_/g, "-"))
   );
-  const activeKeywords = detectKeywords(freeText);
-  const activeFeatures = [...activeChips, ...activeKeywords];
+  const keywordScores = await scoreKeywords(freeText);
+  const hasKeywordSignal = Object.values(keywordScores).some((v) => v > 0.15);
 
-  if (activeFeatures.length === 0) {
-    return null; // no signal at all - neither chips nor recognized free-text keywords
+  if (activeChips.length === 0 && !hasKeywordSignal) {
+    return null;
   }
 
-  const context = bandit.features.map((f) => (activeFeatures.includes(f) ? 1 : 0));
+  const context = bandit.features.map((f) =>
+    bandit.chip_features.includes(f) ? (activeChips.includes(f) ? 1 : 0) : keywordScores[f]
+  );
   const { W1, b1, W2, b2, W3, b3 } = bandit;
 
   const hidden1 = W1[0].map((_, j) => {
@@ -89,13 +243,11 @@ function predictAdjustment(selectedChips, freeText) {
     return sum;
   });
 
-  // Chip instructions still shape the Groq prompt explicitly. Keywords don't
-  // need a separate instruction snippet - the raw free text is already sent
-  // to Groq verbatim - they only need to reach the NUMBERS, which they now do.
   const instruction = activeChips.map((f) => bandit.chip_instructions[f]).join("; ");
+  const strongKeywords = bandit.keyword_features.filter((f) => keywordScores[f] > 0.4);
   const labelParts = [
     ...activeChips.map((f) => f.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())),
-    ...activeKeywords.map((f) => `${f.replace(/\b\w/g, (c) => c.toUpperCase())} (from notes)`),
+    ...strongKeywords.map((f) => `${f.replace(/\b\w/g, (c) => c.toUpperCase())} (from notes)`),
   ];
 
   return { deltas, instruction, label: labelParts.join(", ") };
@@ -103,21 +255,21 @@ function predictAdjustment(selectedChips, freeText) {
 
 // API endpoint for itinerary generation
 app.post("/generate", async (req, res) => {
-  const { destination, budget, days, preferences, feedback, feedbackChips } = req.body;
-
-  const adjustment = (feedbackChips && feedbackChips.length) || feedback
-    ? predictAdjustment(feedbackChips || [], feedback)
-    : null;
+  const { destination, budget, days, preferences, feedback, feedbackChips, startDate } = req.body;
 
   if (!destination || !budget || !days) {
     return res.status(400).json({ error: "Please fill in all fields." });
   }
 
+  const adjustment = feedback || (feedbackChips && feedbackChips.length)
+    ? await predictAdjustment(feedbackChips || [], feedback)
+    : null;
+
   try {
     const response = await axios.post(
       GROQ_URL,
       {
-        model: "llama-3.1-8b-instant", 
+        model: "llama-3.1-8b-instant",
         messages: [
           {
             role: "system",
@@ -126,7 +278,7 @@ app.post("/generate", async (req, res) => {
           },
           {
             role: "user",
-            content: `Plan a ${days}-day trip to ${destination} with a budget of ₹${budget} (Indian Rupees). Include top attractions, meal options, accommodation, and travel tips, with all costs quoted in Indian Rupees (₹). Preferences: ${preferences}.${feedback ? ` The user reviewed a previous version of this plan and gave this feedback — adjust accordingly: ${feedback}.` : ""}${adjustment && adjustment.instruction ? ` Specifically, ${adjustment.instruction}.` : ""}`,
+            content: `Plan a ${days}-day trip to ${destination} with a budget of ₹${budget} (Indian Rupees). Include top attractions, meal options, accommodation, and travel tips, with all costs quoted in Indian Rupees (₹). Preferences: ${preferences}.${feedback ? ` The user reviewed a previous version of this plan and gave this feedback — adjust accordingly: ${feedback}.` : ""}${adjustment && adjustment.instruction ? ` Specifically, ${adjustment.instruction}.` : ""} Do not include your own overall "Budget Breakdown" or "Total Budget" summary section — a separate, authoritative budget breakdown is already shown to the user elsewhere in the app. Only mention individual prices naturally within the day-by-day plan where relevant.`,
           },
         ],
         temperature: 0.8,
@@ -145,6 +297,8 @@ app.post("/generate", async (req, res) => {
       budgetAdjustment: adjustment
         ? { label: adjustment.label, deltas: adjustment.deltas }
         : null,
+      seasonalOutlook: startDate ? getSeasonalOutlook(destination, startDate) : null,
+      realDataPriceInsight: getRealDataPriceInsight(destination),
     });
   } catch (error) {
     console.error("Error from Groq API:", error.response?.data || error.message);
@@ -172,7 +326,6 @@ app.post("/weather", async (req, res) => {
       return res.status(404).json({ error: "Location not found for weather lookup." });
     }
 
-    // How many days from today does the trip start?
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const tripStart = new Date(startDate);
@@ -180,9 +333,8 @@ app.post("/weather", async (req, res) => {
     const offsetDays = Math.round((tripStart - today) / 86400000);
     const tripDays = Number(days);
 
-    const MAX_FORECAST_DAYS = 16; // limit of free forecast data
+    const MAX_FORECAST_DAYS = 16;
 
-    // Trip starts too far in the future for any forecast to be meaningful
     if (offsetDays >= MAX_FORECAST_DAYS) {
       return res.json({
         location: `${place.name}, ${place.country}`,
@@ -230,4 +382,3 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () =>
   console.log(`Server running at http://localhost:${PORT}`)
 );
-

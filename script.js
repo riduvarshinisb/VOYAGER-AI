@@ -14,11 +14,16 @@ document.addEventListener("DOMContentLoaded", () => {
       chip.classList.toggle("selected");
     });
   });
+
   const budgetBreakdownDiv = document.getElementById("budget-breakdown");
   const weatherInfoDiv = document.getElementById("weather-info");
   const mapContainerDiv = document.getElementById("map-container");
+  const seasonalOutlookDiv = document.getElementById("seasonal-outlook");
+  const priceInsightDiv = document.getElementById("price-insight");
   let lastWeather = null;
   let lastBudgetDeltas = null;
+  let lastSeasonalOutlook = null;
+  let lastPriceInsight = null;
 
   function getBudgetBreakdown(totalBudget, deltas = null) {
     const base = [0.35, 0.25, 0.15, 0.15, 0.10];
@@ -37,8 +42,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }));
   }
 
-  function renderBudgetBreakdown(totalBudget) {
-    const breakdown = getBudgetBreakdown(totalBudget);
+  function renderBudgetBreakdown(totalBudget, deltas = null) {
+    const breakdown = getBudgetBreakdown(totalBudget, deltas);
     const rows = breakdown
       .map(
         (item) =>
@@ -74,6 +79,16 @@ document.addEventListener("DOMContentLoaded", () => {
     return `<div class="weather-forecast">${days}</div>${partialNote}`;
   }
 
+  function applyResponseExtras(data, budget) {
+    lastSeasonalOutlook = data.seasonalOutlook || null;
+    seasonalOutlookDiv.innerHTML = lastSeasonalOutlook
+      ? `<strong>${lastSeasonalOutlook.type} destination:</strong> ${lastSeasonalOutlook.message}`
+      : "";
+
+    lastPriceInsight = data.realDataPriceInsight || null;
+    priceInsightDiv.innerHTML = lastPriceInsight ? lastPriceInsight.message : "";
+  }
+
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
 
@@ -100,7 +115,7 @@ document.addEventListener("DOMContentLoaded", () => {
         fetch("/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ destination, budget, days, preferences }),
+          body: JSON.stringify({ destination, budget, days, startDate, preferences }),
         }),
         fetch("/weather", {
           method: "POST",
@@ -123,6 +138,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
       budgetBreakdownDiv.innerHTML = renderBudgetBreakdown(Number(budget), null);
       lastBudgetDeltas = null;
+
+      applyResponseExtras(data, budget);
 
       const mapQuery = encodeURIComponent(destination);
       mapContainerDiv.innerHTML = `<iframe src="https://maps.google.com/maps?q=${mapQuery}&output=embed" loading="lazy" allowfullscreen></iframe>`;
@@ -180,6 +197,35 @@ document.addEventListener("DOMContentLoaded", () => {
         const pageHeight = 842;
         const margin = 40;
         let y = 172;
+
+        // --- SEASONAL OUTLOOK ---
+        if (lastSeasonalOutlook) {
+          doc.setFont("times", "italic");
+          doc.setFontSize(10);
+          doc.setTextColor(100, 100, 100);
+          const wrapped = doc.splitTextToSize(
+            `${lastSeasonalOutlook.type} destination: ${lastSeasonalOutlook.message}`,
+            500
+          );
+          wrapped.forEach((line) => {
+            doc.text(line, margin, y);
+            y += 13;
+          });
+          y += 6;
+        }
+
+        // --- REAL-DATA PRICE INSIGHT ---
+        if (lastPriceInsight) {
+          doc.setFont("times", "italic");
+          doc.setFontSize(10);
+          doc.setTextColor(100, 100, 100);
+          const wrapped = doc.splitTextToSize(lastPriceInsight.message, 500);
+          wrapped.forEach((line) => {
+            doc.text(line, margin, y);
+            y += 13;
+          });
+          y += 6;
+        }
 
         // --- WEATHER ---
         if (lastWeather && lastWeather.outOfRange) {
@@ -325,6 +371,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
       itineraryText.innerHTML = `<div class="itinerary-box">${text}</div>`;
       downloadBtn.classList.remove("hidden");
+
+      applyResponseExtras(data, lastFormData.budget);
 
       lastBudgetDeltas = data.budgetAdjustment ? data.budgetAdjustment.deltas : null;
       budgetBreakdownDiv.innerHTML = renderBudgetBreakdown(Number(lastFormData.budget), lastBudgetDeltas);

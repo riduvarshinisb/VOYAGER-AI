@@ -337,3 +337,23 @@ input:focus, textarea:focus {
   background: var(--accent);
   color: #fff;
 }
+
+.price-insight {
+  margin-bottom: 12px;
+  font-size: 0.85em;
+  color: var(--ink-soft);
+  font-style: italic;
+}
+
+.seasonal-outlook {
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background: var(--accent-tint);
+  border-radius: 4px;
+  font-size: 0.88em;
+  color: var(--ink);
+}
+
+.seasonal-outlook strong {
+  color: var(--accent);
+}
