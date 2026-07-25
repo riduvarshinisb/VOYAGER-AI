@@ -49,48 +49,64 @@ const bandit = JSON.parse(
   fs.readFileSync(path.join(__dirname, "bandit_weights.json"), "utf-8")
 );
 
-function predictAdjustment(selectedChips) {
-  const activeFeatures = bandit.features.filter((f) =>
+function detectKeywords(freeText) {
+  if (!freeText) return [];
+  const lower = freeText.toLowerCase();
+  return bandit.keyword_features.filter((kw) =>
+    bandit.keyword_triggers[kw].some((trigger) => lower.includes(trigger))
+  );
+}
+
+function predictAdjustment(selectedChips, freeText) {
+  const activeChips = bandit.chip_features.filter((f) =>
     selectedChips.includes(f.replace(/_/g, "-"))
   );
+  const activeKeywords = detectKeywords(freeText);
+  const activeFeatures = [...activeChips, ...activeKeywords];
 
   if (activeFeatures.length === 0) {
-    return null; // no feedback signal to act on
+    return null; // no signal at all - neither chips nor recognized free-text keywords
   }
 
   const context = bandit.features.map((f) => (activeFeatures.includes(f) ? 1 : 0));
-  const { W1, b1, W2, b2 } = bandit;
+  const { W1, b1, W2, b2, W3, b3 } = bandit;
 
-  // Layer 1: context -> hidden, with ReLU
-  const hidden = W1[0].map((_, j) => {
+  const hidden1 = W1[0].map((_, j) => {
     let sum = b1[j];
     for (let i = 0; i < context.length; i++) sum += context[i] * W1[i][j];
     return Math.max(0, sum);
   });
 
-  // Layer 2: hidden -> predicted budget deltas (continuous, one per category)
-  const deltas = W2[0].map((_, j) => {
+  const hidden2 = W2[0].map((_, j) => {
     let sum = b2[j];
-    for (let i = 0; i < hidden.length; i++) sum += hidden[i] * W2[i][j];
+    for (let i = 0; i < hidden1.length; i++) sum += hidden1[i] * W2[i][j];
+    return Math.max(0, sum);
+  });
+
+  const deltas = W3[0].map((_, j) => {
+    let sum = b3[j];
+    for (let i = 0; i < hidden2.length; i++) sum += hidden2[i] * W3[i][j];
     return sum;
   });
 
-  // Instruction + label are built deterministically from EVERY active chip
-  // (not chosen by the network), so no selected concern is ever dropped.
-  const instruction = activeFeatures.map((f) => bandit.chip_instructions[f]).join("; ");
-  const label = activeFeatures
-    .map((f) => f.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()))
-    .join(", ");
+  // Chip instructions still shape the Groq prompt explicitly. Keywords don't
+  // need a separate instruction snippet - the raw free text is already sent
+  // to Groq verbatim - they only need to reach the NUMBERS, which they now do.
+  const instruction = activeChips.map((f) => bandit.chip_instructions[f]).join("; ");
+  const labelParts = [
+    ...activeChips.map((f) => f.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())),
+    ...activeKeywords.map((f) => `${f.replace(/\b\w/g, (c) => c.toUpperCase())} (from notes)`),
+  ];
 
-  return { deltas, instruction, label };
+  return { deltas, instruction, label: labelParts.join(", ") };
 }
 
 // API endpoint for itinerary generation
 app.post("/generate", async (req, res) => {
   const { destination, budget, days, preferences, feedback, feedbackChips } = req.body;
 
-  const adjustment = feedbackChips && feedbackChips.length
-    ? predictAdjustment(feedbackChips)
+  const adjustment = (feedbackChips && feedbackChips.length) || feedback
+    ? predictAdjustment(feedbackChips || [], feedback)
     : null;
 
   if (!destination || !budget || !days) {
