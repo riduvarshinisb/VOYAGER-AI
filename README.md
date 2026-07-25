@@ -21,9 +21,9 @@ AI-personalized travel itinerary planner. Collects trip preferences, generates a
 - PDF: jsPDF (client-side)
 - Deployment: Render
 
-## ML component: feedback-adjustment model
+## DL component: feedback-adjustment model
 
-`ml/train_bandit.py` trains a deep contextual bandit that predicts a budget-delta adjustment from user feedback.
+`dl/train_bandit.py` trains a deep contextual bandit that predicts a budget-delta adjustment from user feedback.
 
 - **Input (10 features):** 5 preset feedback chips + 5 keyword categories detected from free-text notes (shopping, nightlife, nature, luxury, family)
 - **Architecture:** 10 → 20 (ReLU) → 14 (ReLU) → 5 (linear output = predicted budget deltas)
