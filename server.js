@@ -4,6 +4,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
+import fs from "fs";
 
 dotenv.config();
 const app = express();
@@ -39,9 +40,58 @@ function describeWeather(code) {
   return WEATHER_CODES[code] || "Weather unavailable";
 }
 
+// --- Feedback-adjustment model (trained offline, loaded here for inference) ---
+// v2: predicts a continuous, BLENDED budget-delta vector directly, instead
+// of picking one of several fixed "arms" - this avoids the tie-break bug
+// where two valid feedback signals (e.g. "more culture" + "relax the pace")
+// would silently cancel down to only one winner being acted on.
+const bandit = JSON.parse(
+  fs.readFileSync(path.join(__dirname, "bandit_weights.json"), "utf-8")
+);
+
+function predictAdjustment(selectedChips) {
+  const activeFeatures = bandit.features.filter((f) =>
+    selectedChips.includes(f.replace(/_/g, "-"))
+  );
+
+  if (activeFeatures.length === 0) {
+    return null; // no feedback signal to act on
+  }
+
+  const context = bandit.features.map((f) => (activeFeatures.includes(f) ? 1 : 0));
+  const { W1, b1, W2, b2 } = bandit;
+
+  // Layer 1: context -> hidden, with ReLU
+  const hidden = W1[0].map((_, j) => {
+    let sum = b1[j];
+    for (let i = 0; i < context.length; i++) sum += context[i] * W1[i][j];
+    return Math.max(0, sum);
+  });
+
+  // Layer 2: hidden -> predicted budget deltas (continuous, one per category)
+  const deltas = W2[0].map((_, j) => {
+    let sum = b2[j];
+    for (let i = 0; i < hidden.length; i++) sum += hidden[i] * W2[i][j];
+    return sum;
+  });
+
+  // Instruction + label are built deterministically from EVERY active chip
+  // (not chosen by the network), so no selected concern is ever dropped.
+  const instruction = activeFeatures.map((f) => bandit.chip_instructions[f]).join("; ");
+  const label = activeFeatures
+    .map((f) => f.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()))
+    .join(", ");
+
+  return { deltas, instruction, label };
+}
+
 // API endpoint for itinerary generation
 app.post("/generate", async (req, res) => {
-  const { destination, budget, days, preferences, feedback } = req.body;
+  const { destination, budget, days, preferences, feedback, feedbackChips } = req.body;
+
+  const adjustment = feedbackChips && feedbackChips.length
+    ? predictAdjustment(feedbackChips)
+    : null;
 
   if (!destination || !budget || !days) {
     return res.status(400).json({ error: "Please fill in all fields." });
@@ -60,7 +110,7 @@ app.post("/generate", async (req, res) => {
           },
           {
             role: "user",
-            content: `Plan a ${days}-day trip to ${destination} with a budget of ₹${budget} (Indian Rupees). Include top attractions, meal options, accommodation, and travel tips, with all costs quoted in Indian Rupees (₹). Preferences: ${preferences}.${feedback ? ` The user reviewed a previous version of this plan and gave this feedback — adjust accordingly: ${feedback}.` : ""}`,
+            content: `Plan a ${days}-day trip to ${destination} with a budget of ₹${budget} (Indian Rupees). Include top attractions, meal options, accommodation, and travel tips, with all costs quoted in Indian Rupees (₹). Preferences: ${preferences}.${feedback ? ` The user reviewed a previous version of this plan and gave this feedback — adjust accordingly: ${feedback}.` : ""}${adjustment && adjustment.instruction ? ` Specifically, ${adjustment.instruction}.` : ""}`,
           },
         ],
         temperature: 0.8,
@@ -74,7 +124,12 @@ app.post("/generate", async (req, res) => {
     );
 
     const itinerary = response.data?.choices?.[0]?.message?.content || "No response generated.";
-    res.json({ itinerary });
+    res.json({
+      itinerary,
+      budgetAdjustment: adjustment
+        ? { label: adjustment.label, deltas: adjustment.deltas }
+        : null,
+    });
   } catch (error) {
     console.error("Error from Groq API:", error.response?.data || error.message);
     res.status(500).json({

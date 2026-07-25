@@ -18,18 +18,22 @@ document.addEventListener("DOMContentLoaded", () => {
   const weatherInfoDiv = document.getElementById("weather-info");
   const mapContainerDiv = document.getElementById("map-container");
   let lastWeather = null;
+  let lastBudgetDeltas = null;
 
-  function getBudgetBreakdown(totalBudget) {
-    const categories = [
-      { label: "Accommodation", percent: 0.35 },
-      { label: "Food & Dining", percent: 0.25 },
-      { label: "Local Transport", percent: 0.15 },
-      { label: "Activities & Sightseeing", percent: 0.15 },
-      { label: "Shopping & Misc.", percent: 0.10 },
-    ];
-    return categories.map((c) => ({
-      label: c.label,
-      amount: totalBudget * c.percent,
+  function getBudgetBreakdown(totalBudget, deltas = null) {
+    const base = [0.35, 0.25, 0.15, 0.15, 0.10];
+    const labels = ["Accommodation", "Food & Dining", "Local Transport", "Activities & Sightseeing", "Shopping & Misc."];
+
+    let percents = base;
+    if (deltas && deltas.length === 5) {
+      percents = base.map((p, i) => Math.max(0.03, p + deltas[i] / 100));
+      const sum = percents.reduce((a, b) => a + b, 0);
+      percents = percents.map((p) => p / sum); // renormalize to 100%
+    }
+
+    return labels.map((label, i) => ({
+      label,
+      amount: totalBudget * percents[i],
     }));
   }
 
@@ -117,7 +121,8 @@ document.addEventListener("DOMContentLoaded", () => {
         weatherInfoDiv.innerHTML = "";
       }
 
-      budgetBreakdownDiv.innerHTML = renderBudgetBreakdown(Number(budget));
+      budgetBreakdownDiv.innerHTML = renderBudgetBreakdown(Number(budget), null);
+      lastBudgetDeltas = null;
 
       const mapQuery = encodeURIComponent(destination);
       mapContainerDiv.innerHTML = `<iframe src="https://maps.google.com/maps?q=${mapQuery}&output=embed" loading="lazy" allowfullscreen></iframe>`;
@@ -213,7 +218,7 @@ document.addEventListener("DOMContentLoaded", () => {
         doc.text("Budget Breakdown", margin, y);
         y += 18;
 
-        const breakdown = getBudgetBreakdown(Number(budget));
+        const breakdown = getBudgetBreakdown(Number(budget), lastBudgetDeltas);
         doc.setFontSize(11);
         breakdown.forEach((item) => {
           doc.setFont("times", "normal");
@@ -283,12 +288,14 @@ document.addEventListener("DOMContentLoaded", () => {
   regenerateBtn.addEventListener("click", async () => {
     if (!lastFormData) return;
 
-    const selectedChips = Array.from(feedbackChips)
-      .filter((c) => c.classList.contains("selected"))
-      .map((c) => c.textContent);
+    const selectedChipEls = Array.from(feedbackChips).filter((c) =>
+      c.classList.contains("selected")
+    );
+    const selectedChipKeys = selectedChipEls.map((c) => c.dataset.value);
+    const selectedChipLabels = selectedChipEls.map((c) => c.textContent);
     const freeText = feedbackText.value.trim();
 
-    const feedbackNote = [...selectedChips, freeText].filter(Boolean).join("; ");
+    const feedbackNote = [...selectedChipLabels, freeText].filter(Boolean).join("; ");
 
     itineraryText.innerHTML = `<p>Regenerating with your feedback…</p>`;
     downloadBtn.classList.add("hidden");
@@ -297,7 +304,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const response = await fetch("/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...lastFormData, feedback: feedbackNote }),
+        body: JSON.stringify({ ...lastFormData, feedback: feedbackNote, feedbackChips: selectedChipKeys }),
       });
 
       if (!response.ok) throw new Error(`Server returned ${response.status}`);
@@ -318,6 +325,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
       itineraryText.innerHTML = `<div class="itinerary-box">${text}</div>`;
       downloadBtn.classList.remove("hidden");
+
+      lastBudgetDeltas = data.budgetAdjustment ? data.budgetAdjustment.deltas : null;
+      budgetBreakdownDiv.innerHTML = renderBudgetBreakdown(Number(lastFormData.budget), lastBudgetDeltas);
+      if (data.budgetAdjustment && data.budgetAdjustment.label) {
+        budgetBreakdownDiv.innerHTML =
+          `<p class="weather-note">Budget adjusted for: <strong>${data.budgetAdjustment.label}</strong></p>` +
+          budgetBreakdownDiv.innerHTML;
+      }
 
       feedbackChips.forEach((c) => c.classList.remove("selected"));
       feedbackText.value = "";
