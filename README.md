@@ -55,7 +55,7 @@ Open `http://localhost:3000`.
 ## Retraining the feedback model
 
 ```bash
-cd ml
+cd dl
 python3 train_bandit.py
 ```
 Overwrites `bandit_weights.json` in the project root (requires `numpy`).
